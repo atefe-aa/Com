@@ -24,7 +24,7 @@ Route::get('login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('logout', [AuthController::class, 'logout']);
 
-    Route::group(['middleware' => ['role:administrator']], function () {
+    Route::group(['middleware' => ['role:administrator']], static function () {
         Route::apiResource('company', CompanyController::class);
         Route::apiResource('employee', EmployeeController::class);
     });

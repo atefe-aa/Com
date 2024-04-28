@@ -36,11 +36,11 @@ class EmployeeController extends Controller
     {
         try {
             $employee = Employee::create([
-                "first_name" => $request->input('firstName'),
-                "last_name" => $request->input('lastName'),
-                "company_id" => $request->input('companyId'),
-                "email" => $request->input('email'),
-                "phone" => $request->input('phone'),
+                "first_name" => $request->get('firstName'),
+                "last_name" => $request->get('lastName'),
+                "company_id" => $request->get('companyId'),
+                "email" => $request->get('email'),
+                "phone" => $request->get('phone'),
             ]);
 
             return new EmployeeResource($employee);
@@ -56,8 +56,11 @@ class EmployeeController extends Controller
     public function show(string $id)
     {
         try {
-            $company = Employee::findOrFail($id);
-            return new EmployeeResource($company);
+            $employee = Employee::find($id);
+            if (!$employee) {
+                return response()->json(['message' => 'Failed to fetch employee. Employee not found'], 404);
+            }
+            return new EmployeeResource($employee);
         } catch (Exception $e) {
             Log::info("Failed to fetch employee. " . $e->getMessage());
             return response()->json(['message' => 'Failed to fetch employee. Please try again later'], 500);
@@ -71,20 +74,39 @@ class EmployeeController extends Controller
     public function update(Request $request, string $id)
     {
         try {
-            $employee = Employee::findOrFail($id);
-            $employee->update([
-                "first_name" => $request->input('firstName') ?: $employee->fisrt_name,
-                "last_name" => $request->input('lastName') ?: $employee->last_name,
-                "company_id" => $request->input('companyId') ?: $employee->company_id,
-                "email" => $request->input('email'),
-                "phone" => $request->input('phone'),
-            ]);
+            $employee = Employee::find($id);
+            if (!$employee) {
+                return response()->json(['message' => 'Failed to fetch employee. Employee not found'], 404);
+            }
+            $updateData = [];
+            $incomingData = $request->all();
+            foreach ($incomingData as $key => $value) {
+
+                if (($key === 'firstName' || $key === 'lastName' || $key === 'companyId') && empty($value)) {
+                    $field = __('validation.attributes.' . $key);
+                    return response()->json(['message' => __('messages.notEmpty', ['attribute' => $field])], 422);
+                }
+                $column = $this->getColumn($key);
+                $updateData[$column] = $value;
+            }
+
+            $employee->update($updateData);
 
             return new EmployeeResource($employee);
         } catch (Exception $e) {
             Log::info("Failed to update employee. " . $e->getMessage());
             return response()->json(['message' => 'Failed to update employee. Please try again later'], 500);
         }
+    }
+
+    private function getColumn(string $field)
+    {
+        return match ($field) {
+            'firstName' => "first_name",
+            'lastName' => "last_name",
+            'companyId' => "company_id",
+            default => $field,
+        };
     }
 
     /**
@@ -95,7 +117,7 @@ class EmployeeController extends Controller
         try {
             $employee = Employee::findOrFail($id);
             if ($employee->delete()) {
-                return response()->json(['data' => 'Employee deleted successfully']);
+                return response()->json(['data' => __('messages.success')]);
             }
 
             return response()->json(['message' => 'Failed to delete employee.'], 500);

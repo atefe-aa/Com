@@ -6,6 +6,8 @@ use App\Http\Requests\StoreCompanyRequest;
 use App\Http\Requests\UpdateCompanyRequest;
 use App\Http\Resources\CompanyResource;
 use App\Models\Company;
+use App\Models\Employee;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Mockery\Exception;
 
@@ -23,7 +25,7 @@ class CompanyController extends Controller
             return CompanyResource::collection($companies);
         } catch (Exception $e) {
             Log::info("Failed to fetch companies. " . $e->getMessage());
-            return response()->json(['message' => 'Failed to fetch companies. Please try again later'], 500);
+            return response()->json(['message' => __('messages.failed')], 500);
 
         }
 
@@ -32,9 +34,12 @@ class CompanyController extends Controller
     /**
      * Store a newly created resource in storage.
      */
+    /**
+     * @param StoreCompanyRequest $request
+     * @return CompanyResource|JsonResponse
+     */
     public function store(StoreCompanyRequest $request)
     {
-        Log::info($request->all());
         try {
             $company = Company::create([
                 "name" => $request->get("name"),
@@ -45,7 +50,7 @@ class CompanyController extends Controller
             return new CompanyResource($company);
         } catch (Exception $e) {
             Log::info("Failed to create company. " . $e->getMessage());
-            return response()->json(['message' => 'Failed to create company. Please try again later'], 500);
+            return response()->json(['message' => __('messages.failed')], 500);
         }
     }
 
@@ -55,11 +60,14 @@ class CompanyController extends Controller
     public function show(string $id)
     {
         try {
-            $company = Company::findOrFail($id);
+            $company = Company::find($id);
+            if (!$company) {
+                return response()->json(['message' => __('messages.notFound')], 404);
+            }
             return new CompanyResource($company);
         } catch (Exception $e) {
             Log::info("Failed to fetch company. " . $e->getMessage());
-            return response()->json(['message' => 'Failed to fetch company. Please try again later'], 500);
+            return response()->json(['message' => __('messages.failed')], 500);
 
         }
     }
@@ -70,17 +78,26 @@ class CompanyController extends Controller
     public function update(UpdateCompanyRequest $request, string $id)
     {
         try {
-            $company = Company::findOrFail($id);
-            $company->update([
-                'name' => $request->input('name') ?: $company->name,
-                'email' => $request->input('email'),
-                'website' => $request->input('website')
-            ]);
+            $company = Company::find($id);
+            if (!$company) {
+                return response()->json(['message' => __('messages.notFound')], 404);
+            }
+            $updateData = [];
+            $incomingData = $request->all();
+            foreach ($incomingData as $key => $value) {
+                if ($key === 'name' && empty($value)) {
+                    $field = __('validation.attributes.' . $key);
+                    return response()->json(['message' => __('messages.notEmpty', ['attribute' => $field])], 422);
+                }
+                $updateData[$key] = $value;
+            }
+
+            $company->update($updateData);
 
             return new CompanyResource($company);
         } catch (Exception $e) {
             Log::info("Failed to update company. " . $e->getMessage());
-            return response()->json(['message' => 'Failed to update company. Please try again later'], 500);
+            return response()->json(['message' => __('messages.failed')], 500);
         }
     }
 
@@ -91,14 +108,18 @@ class CompanyController extends Controller
     {
         try {
             $company = Company::findOrFail($id);
+            $companyIsUsed = Employee::where('company_id', $id)->count() > 0;
+            if ($companyIsUsed) {
+                return response()->json(['message' => __('messages.deletionRestricted')], 403);
+            }
             if ($company->delete()) {
-                return response()->json(['data' => 'Company deleted successfully']);
+                return response()->json(['data' => __('messages.success')]);
             }
 
-            return response()->json(['message' => 'Failed to delete company.']);
+            return response()->json(['message' => __('messages.failed')]);
         } catch (Exception $e) {
             Log::info("Failed to delete company. " . $e->getMessage());
-            return response()->json(['message' => 'Failed to delete company. Please try again later'], 500);
+            return response()->json(['message' => __('messages.failed')], 500);
         }
     }
 }
